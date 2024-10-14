@@ -43,12 +43,14 @@ def __():
     from sklearn.preprocessing import StandardScaler
     from sklearn.impute import KNNImputer
     from sklearn.decomposition import PCA
+    from sklearn.cluster import KMeans
 
     theme = load_theme("boxy_light")
     theme.apply()
     # ... plotting code here
     theme.apply_transforms()
     return (
+        KMeans,
         KNNImputer,
         PCA,
         StandardScaler,
@@ -271,9 +273,9 @@ def __(mo):
 
 
 @app.cell
-def __(plt, sns, train_original):
+def __(pallete_survived, plt, sns, train_original):
     sns.violinplot(
-        x="Sex", y="Age", hue="Survived", data=train_original, split=True
+        x="Sex", y="Age", hue="Survived", data=train_original, split=True, palette=pallete_survived
     )
     plt.title("Gráfico de violino entre gênero, idade e sobrevivência", fontsize=18, fontweight="bold", pad=20)
     return
@@ -308,10 +310,9 @@ def __(plt, sns, train_original):
 def __(pd, sns, train_original):
     # Divide Fare into 4 bins
     train_original['Fare_Range'] = pd.qcut(train_original['Fare'], 4)
-     
+
     # Barplot - Shows approximate values based on the height of bars.
     sns.barplot(x ='Fare_Range', y ='Survived', hue="Fare_Range", data = train_original)
-
     return
 
 
@@ -329,15 +330,20 @@ def __(mo):
     return
 
 
+@app.cell(hide_code=True)
+def __(mo):
+    mo.md(r"""Para começar, podemos criar uma ideia de como a divisão de classes se parecerá através da aplicação do método SVD de decomposição da classe em seus autovalores principais.""")
+    return
+
+
 @app.cell
-def __(PCA, X_train, np, plt, y_train):
+def __(PCA, X_train, np, pallete_survived, plt, y_train):
     pca = PCA(n_components=2)
     pca_result = pca.fit_transform(X_train)
 
     _classes = np.unique(y_train)
 
-    colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k', 'w']
-    aux = 0
+    _aux = 0
     plt.figure(figsize=(8,5))
     for c in _classes:
         if c == 1:
@@ -346,17 +352,48 @@ def __(PCA, X_train, np, plt, y_train):
             lb = 'Morreu'
         nodes = np.where(y_train == c)
         plt.scatter(pca_result[nodes,0], pca_result[nodes,1], s=50, 
-                    label = lb)
-        aux = aux + 1
+                    label = lb, color=pallete_survived[_aux])
+        _aux = _aux + 1
     plt.legend()
     plt.xlabel("First component", fontsize=20)
     plt.ylabel("Second component", fontsize=20)
     plt.xticks(color='k', size=20)
     plt.yticks(color='k', size=20)
     plt.show()
+    return c, lb, nodes, pca, pca_result
 
 
-    return aux, c, colors, lb, nodes, pca, pca_result
+@app.cell
+def __(mo):
+    mo.md(r"""Vemos aqui que o nosso dataset tem uma grande correlação inerente, e o agrupamento em clusters não será muito útil para explicar a (não) sobrevivência de certos grupos.""")
+    return
+
+
+@app.cell
+def __(KMeans, pallete_survived, pca_result, plt, y_train):
+    _k = 2 # numero de clusters a serem identificados
+    # define o método com k clusters
+    kmeans = KMeans(n_clusters=_k) 
+    # realiza o ajuste considerando os dados X
+    kmeans.fit(pca_result)
+    # faz a predição, identificando os clusters
+    y_km = kmeans.fit_predict(pca_result)
+
+    plt.figure(figsize=(15,5))
+    # mostra o primeiro gráfico
+    plt.subplot(1, 2, 2)
+    plt.scatter(pca_result[:,0], pca_result[:,1], c=y_km, cmap='viridis', s=50)
+    plt.title('K-means')
+    centers = kmeans.cluster_centers_
+    # mostra os centróides obtidos
+    plt.scatter(centers[:, 0], centers[:, 1], c='red', s=100, alpha=0.9); 
+
+    # mostra o segundo gráfico
+    plt.subplot(1,2, 1)
+    plt.scatter(pca_result[:,0], pca_result[:,1], c=y_train, pallete=pallete_survived, s=50)
+    plt.title('Dados originais')
+    plt.show()
+    return centers, kmeans, y_km
 
 
 if __name__ == "__main__":
